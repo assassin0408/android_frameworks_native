@@ -407,7 +407,7 @@ private:
     // mBlitSlots contains several buffers which will
     // be rendered alternately in case color transform is needed (instead
     // of rendering the buffers in mSlots).
-    EGLSlot mBlitSlots[NUM_BLIT_BUFFER_SLOTS];	407
+    EGLSlot mBlitSlots[NUM_BLIT_BUFFER_SLOTS];
 
     // mGraphicBufferAlloc is the connection to SurfaceFlinger that is used to 	
     // allocate new GraphicBuffer objects.
