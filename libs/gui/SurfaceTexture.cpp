@@ -126,6 +126,10 @@ SurfaceTexture::SurfaceTexture(GLuint tex, bool allowSynchronousMode,
     mUseFenceSync(false),
 #endif
     mTexTarget(texTarget),
+#ifdef STE_HARDWARE
+    mNextBlitSlot(0),
+    mNeedsConversion(false),
+#endif
     mEglDisplay(EGL_NO_DISPLAY),
     mEglContext(EGL_NO_CONTEXT),
     mCurrentTexture(BufferQueue::INVALID_BUFFER_SLOT),
@@ -142,8 +146,12 @@ SurfaceTexture::SurfaceTexture(GLuint tex, bool allowSynchronousMode,
 status_t SurfaceTexture::setDefaultMaxBufferCount(int bufferCount) {
     Mutex::Autolock lock(mMutex);
     return mBufferQueue->setDefaultMaxBufferCount(bufferCount);
+#ifdef STE_HARDWARE
+    if (mBlitEngine) {
+        copybit_close(mBlitEngine);
+    }
+#endif
 }
-
 
 status_t SurfaceTexture::setDefaultBufferSize(uint32_t w, uint32_t h)
 {
@@ -154,8 +162,19 @@ status_t SurfaceTexture::setDefaultBufferSize(uint32_t w, uint32_t h)
 }
 
 status_t SurfaceTexture::updateTexImage() {
+#ifndef STE_HARDWARE
+    return SurfaceTexture::updateTexImage(NULL);
+#else
     return SurfaceTexture::updateTexImage(NULL, false);
+#define STE_DEFERDBG 0
+#endif
 }
+
+#ifndef STE_HARDWARE
+status_t SurfaceTexture::updateTexImage(BufferRejecter* rejecter) {
+#else
+status_t SurfaceTexture::updateTexImage(BufferRejecter* rejecter, bool deferConversion) {
+#endif
 
 status_t SurfaceTexture::acquireBufferLocked(BufferQueue::BufferItem *item) {
     status_t err = ConsumerBase::acquireBufferLocked(item);
@@ -562,6 +581,20 @@ GLenum SurfaceTexture::getCurrentTextureTarget() const {
 void SurfaceTexture::getTransformMatrix(float mtx[16]) {
     Mutex::Autolock lock(mMutex);
     memcpy(mtx, mCurrentTransformMatrix, sizeof(mCurrentTransformMatrix));
+#ifdef STE_HARDWARE
+
+    for (int i = 0; i < NUM_BLIT_BUFFER_SLOTS; i++) {
+        mBlitSlots[i].mEglImage = EGL_NO_IMAGE_KHR;
+        mBlitSlots[i].mEglDisplay = EGL_NO_DISPLAY;
+    }
+
+    hw_module_t const* module;
+    mBlitEngine = 0;
+    if (hw_get_module(COPYBIT_HARDWARE_MODULE_ID, &module) == 0) {
+        copybit_open(module, &mBlitEngine);
+    }
+    ALOGE_IF(!mBlitEngine, "\nCannot open copybit mBlitEngine=%p", mBlitEngine);
+#endif
 }
 
 void SurfaceTexture::setFilteringEnabled(bool enabled) {
